@@ -1,8 +1,8 @@
-import re
+from sqlalchemy.orm import session
 from todoapp import app,db
 from todoapp.models import Uses as User,Todo
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask import json, request,jsonify
+from flask import request,jsonify
 import uuid
 import datetime
 import jwt
@@ -32,6 +32,59 @@ def token_required(f):
 def home(login_user,*args, **kwargs):
     print("home login_user------------>",login_user)
     return jsonify({"message":"Hello World"})
+
+@app.route("/api/add-get-todo",methods=["GET","POST"])
+@token_required
+def add_get_todo(login_user,*args, **kwargs):
+    if request.method=="POST":
+        try:
+            title = request.get_json()["title"]
+            new_todo = Todo(title=title,user_id=login_user.id)
+            db.session.add(new_todo)
+            db.session.commit()
+            return jsonify({"message":"Todo Created !"})
+        except Exception as e:
+            return jsonify({"error":str(e)})
+    user_todos = Todo.query.filter_by(user_id=login_user.id)
+    all_todo=[]
+    for todo in user_todos:
+        single_todo = {}
+        single_todo["id"] =todo.id
+        single_todo["title"] =todo.title
+        single_todo["data"] =todo.data
+        all_todo.append(single_todo)
+    return jsonify({"data":all_todo})
+
+@app.route("/api/edit-delete-todo",methods=["DELETE","POST"])
+@token_required
+def edit_delete_todo(login_user,*args, **kwargs):
+    if request.method == "POST":
+        todoid = request.get_json()["todoid"]
+        title = request.get_json()["title"]
+        todo = Todo.query.filter_by(user_id=login_user.id,id=todoid).first()
+        if not todo:
+            return jsonify({"message":f"No Todo Found or This is not Your Todo !"})
+        todo.title=title
+        db.session.commit()
+        return jsonify({"message":"Todo is Updated !"})
+    if request.method == "DELETE":
+        todoid = request.get_json()["todoid"]
+        todo = Todo.query.filter_by(user_id=login_user.id,id=todoid).first()
+        if not todo:
+            return jsonify({"message":f"No Todo Found or This is not Your Todo !"})
+        db.session.delete(todo)
+        db.session.commit()
+        return jsonify({"message":"Todo is Deleted Successfully!"})
+
+@app.route("/api/get-todo/<todoid>")
+@token_required
+def getTodo(login_user,todoid,*args, **kwargs):
+    todo = Todo.query.filter_by(user_id=login_user.id,id=todoid).first()
+    single_todo = {}
+    single_todo["id"] =todo.id
+    single_todo["title"] =todo.title
+    single_todo["data"] =todo.data
+    return jsonify({"data":single_todo})
 
 @app.route("/api/register",methods=['POST'])
 def register():
